@@ -7,37 +7,34 @@ DISK_THRESHOLD=80
 
 # Function to send an alert
 send_alert() {
-    echo "$(tput setaf 1)ALERT: $1 usage exceeded threshold! Current value: $2%$(tput sgr0)"
+  echo "ALERT: $1 usage is above threshold! Current value: $2%"
 }
-send_alert "DISK" 85
 
 while true; do
-  # Monitor CPU
-  cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')
-  cpu_usage=${cpu_usage%.*}
-  if ((cpu_usage >= CPU_THRESHOLD)); then
-    send_alert "CPU" "$cpu_usage"
+  # Calculate resource usage
+  CPU_USAGE=$(top -bn1 | grep "Cpu(s)" | awk '{print 100 - $8}')
+  MEMORY_USAGE=$(free | grep Mem | awk '{print $3/$2 * 100.0}')
+  DISK_USAGE=$(df / | grep / | awk '{print $5}' | sed 's/%//')
+
+  # Get current timestamp
+  TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+
+  # Log the usage values into resource_usage.log
+  echo "$TIMESTAMP | CPU: ${CPU_USAGE}% | Memory: ${MEMORY_USAGE}% | Disk: ${DISK_USAGE}%" >> /home/labex/project/resource_usage.log
+
+  # Check thresholds and send alerts
+  if (( ${CPU_USAGE%.*} > CPU_THRESHOLD )); then
+    send_alert "CPU" "$CPU_USAGE"
   fi
 
-  # Monitor memory
-  memory_usage=$(free | awk '/Mem/ {printf("%3.1f", ($3/$2) * 100)}')
-  memory_usage=${memory_usage%.*}
-  if ((memory_usage >= MEMORY_THRESHOLD)); then
-    send_alert "Memory" "$memory_usage"
+  if (( ${MEMORY_USAGE%.*} > MEMORY_THRESHOLD )); then
+    send_alert "Memory" "$MEMORY_USAGE"
   fi
 
-  # Monitor disk
-  disk_usage=$(df -h / | awk '/\// {print $(NF-1)}')
-  disk_usage=${disk_usage%?}
-  if ((disk_usage >= DISK_THRESHOLD)); then
-    send_alert "Disk" "$disk_usage"
+  if (( DISK_USAGE > DISK_THRESHOLD )); then
+    send_alert "Disk" "$DISK_USAGE"
   fi
 
-  # Display current stats
-  clear
-  echo "Resource Usage:"
-  echo "CPU: $cpu_usage%"
-  echo "Memory: $memory_usage%"
-  echo "Disk: $disk_usage%"
-  sleep 2
+  # Wait 5 seconds before the next check
+  sleep 5
 done
